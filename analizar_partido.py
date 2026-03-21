@@ -47,6 +47,36 @@ def analizar_marcadores(lista):
         "over25": round((over25 / partidos) * 100, 1)
     }
 
+# ==============================
+# CALCULAR PROBABILIDAD FINAL
+# ==============================
+
+def calcular_probabilidad(h2h, local, visitante):
+
+    if not h2h or not local or not visitante:
+        return None
+
+    btts = (h2h["btts"] + local["btts"] + visitante["btts"]) / 3
+    over25 = (h2h["over25"] + local["over25"] + visitante["over25"]) / 3
+
+    return {
+        "btts": round(btts, 1),
+        "over25": round(over25, 1)
+    }
+
+
+# ==============================
+# CALCULAR VALUE BET
+# ==============================
+
+def calcular_value(prob, cuota):
+
+    prob_real = prob / 100
+    prob_casa = 1 / cuota
+
+    value = prob_real - prob_casa
+
+    return round(value * 100, 2)  # en %
 
 # ==============================
 # INICIO DRIVER
@@ -232,7 +262,41 @@ if visitante_stats:
     print("BTTS %:", visitante_stats["btts"])
     print("OVER 2.5 %:", visitante_stats["over25"])
 
+# ==============================
+# CALCULO FINAL
+# ==============================
 
+print("\n==========================")
+print("MODELO DE APUESTA")
+print("==========================")
+
+modelo = calcular_probabilidad(h2h_stats, local_stats, visitante_stats)
+
+if modelo:
+
+    print("Probabilidad BTTS:", modelo["btts"], "%")
+    print("Probabilidad Over 2.5:", modelo["over25"], "%")
+
+    # 👇 AQUÍ METES CUOTAS MANUAL (por ahora)
+    cuota_btts = 1.80
+    cuota_over = 1.90
+
+    value_btts = calcular_value(modelo["btts"], cuota_btts)
+    value_over = calcular_value(modelo["over25"], cuota_over)
+
+    print("\n--- VALUE BET ---")
+
+    print("BTTS Value:", value_btts, "%")
+    print("Over 2.5 Value:", value_over, "%")
+
+    if value_btts > 0:
+        print("👉 BTTS ES VALUE BET")
+
+    if value_over > 0:
+        print("👉 OVER 2.5 ES VALUE BET")
+
+else:
+    print("No se pudo calcular modelo")
 # ==============================
 # CERRAR DRIVER
 # ==============================
