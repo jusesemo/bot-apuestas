@@ -297,6 +297,28 @@ if modelo:
 
 else:
     print("No se pudo calcular modelo")
+
+print("Probabilidad BTTS:", modelo["btts"], "%")
+print("Probabilidad Over 2.5:", modelo["over25"], "%")
+
+print("\n--- VALUE BET ---")
+
+print("BTTS Value:", value_btts, "%")
+print("Over 2.5 Value:", value_over, "%")
+
+
+print("\n==========================")
+print("DECISION FINAL")
+print("==========================")
+
+if value_btts > 5:
+    print("🔥 APOSTAR BTTS")
+
+if value_over > 5:
+    print("🔥 APOSTAR OVER 2.5")
+
+if value_btts <= 5 and value_over <= 5:
+    print("❌ NO APOSTAR ESTE PARTIDO")
 # ==============================
 # CERRAR DRIVER
 # ==============================
