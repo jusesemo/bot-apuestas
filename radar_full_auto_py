@@ -1,0 +1,30 @@
+import subprocess
+import sys
+import re
+
+print("🚀 AUTO ANALIZAR - TERMINAL")
+
+# 1. EJECUTAR TU RADAR
+radar = subprocess.run([sys.executable, "radar_premium.py"], capture_output=True, text=True)
+
+# 2. EXTRAER LINKS
+links = re.findall(r'https://www\.flashscore\.co/partido/futbol/[^\s]+', radar.stdout)
+print(f"\n🎯 {len(links)} partidos encontrados\n")
+
+# 3. ANALIZAR CADA UNO
+for i, link in enumerate(links, 1):
+    print(f"\n📊 {i}/{len(links)}")
+    print(f"🔗 {link.split('/')[-1]}\n{'='*50}")
+    
+    # TU SCRIPT EXACTO
+    analisis = subprocess.run([sys.executable, "analizar_partido_premium.py"], 
+                             input=link, capture_output=True, text=True)
+    
+    # MOSTRAR LIMPIO
+    for line in analisis.stdout.split('\n'):
+        if not line.startswith('['):
+            print(line)
+    
+    print('='*50)
+
+print(f"\n✅ TERMINADO! {len(links)} partidos analizados")

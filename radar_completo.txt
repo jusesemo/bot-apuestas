@@ -1,0 +1,93 @@
+import subprocess
+import sys
+import re
+import time
+
+print("🤖 RADAR FULL AUTO - 0 MANUAL")
+
+# ==============================
+# PASO 1: EJECUTAR TU RADAR Y CAPTURAR LINKS
+# ==============================
+print("📡 1/3 Ejecutando radar_premium.py...")
+radar_result = subprocess.run([sys.executable, "radar_premium.py"], 
+                             capture_output=True, text=True)
+
+print("✅ Links capturados automáticamente!")
+
+# ==============================
+# PASO 2: EXTRAER LINKS AUTOMÁTICO
+# ==============================
+links = re.findall(r'https://www\.flashscore\.co/partido/futbol/[^\s]+', radar_result.stdout)
+links = list(set(links))  # Quitar duplicados
+
+print(f"🎯 {len(links)} links encontrados AUTO!")
+
+if not links:
+    print("❌ No se encontraron links")
+    exit()
+
+# ==============================
+# PASO 3: ARCHIVO RESULTADOS
+# ==============================
+with open("radar_full_auto.txt", "w", encoding="utf-8") as f:
+    f.write("🤖 RADAR FULL AUTO\n")
+    f.write(f"📅 Día: {time.strftime('%Y-%m-%d %H:%M')}\n")
+    f.write(f"🎯 {len(links)} partidos\n")
+    f.write("="*80 + "\n\n")
+
+# ==============================
+# PASO 4: ANALIZAR TODOS CON TU SCRIPT
+# ==============================
+print("\n📊 2/3 Analizando TODOS...")
+contador = 0
+value_bets = 0
+
+for link in links:
+    contador += 1
+    print(f"  [{contador}/{len(links)}] {link.split('/')[-1][:20]}...")
+    
+    # TU SCRIPT EXACTO
+    analisis_result = subprocess.run([
+        sys.executable, "analizar_partido_premium.py"
+    ], input=link, capture_output=True, text=True, timeout=25)
+    
+    # LIMPIAR
+    lines = analisis_result.stdout.split('\n')
+    clean_lines = []
+    for line in lines:
+        if not line.startswith('[') and 'ERROR' not in line and len(line.strip()) > 0:
+            clean_lines.append(line)
+    
+    clean_analisis = '\n'.join(clean_lines)
+    
+    # DECISIÓN
+    decision = "❌ NO APOSTAR"
+    if "🔥 APOSTAR" in clean_analisis:
+        decision = "🔥 VALUE BET!"
+        value_bets += 1
+    
+    # MOSTRAR RESUMEN
+    print(f"     → {decision}")
+    
+    # GUARDAR TODO
+    with open("radar_full_auto.txt", "a", encoding="utf-8") as f:
+        f.write(f"\n📊 #{contador} {decision}\n")
+        f.write(f"🔗 {link}\n")
+        f.write("-" * 60 + "\n")
+        f.write(clean_analisis + "\n")
+        f.write("-" * 60 + "\n\n")
+
+# ==============================
+# PASO 5: RESUMEN FINAL
+# ==============================
+print("\n🎉 3/3 ¡LISTO!")
+print(f"📊 Total partidos: {len(links)}")
+print(f"🔥 Value Bets: {value_bets}")
+print(f"💾 Archivo: radar_full_auto.txt")
+
+with open("radar_full_auto.txt", "a", encoding="utf-8") as f:
+    f.write("="*80 + "\n")
+    f.write(f"🎯 RESUMEN: {len(links)} partidos | {value_bets} Value Bets\n")
+    f.write("="*80 + "\n")
+
+print("✅ FULL AUTO COMPLETADO!")
