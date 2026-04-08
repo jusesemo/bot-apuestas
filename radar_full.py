@@ -67,10 +67,6 @@ print("\n--- FILTRANDO PARTIDOS ---")
 for partido in partidos:
     texto = partido.text.upper()
     
-    # NUEVO FILTRO DE PARTIDOS MUERTOS (POCA INFO)
-    if len(texto) < 25:
-        continue
-    
     # NUEVO FILTRO DE CALIDAD POR LÍNEAS MÍNIMAS
     if len(texto.splitlines()) < 3:
         continue
@@ -81,9 +77,9 @@ for partido in partidos:
     if len(equipos[1]) < 4 or len(equipos[2]) < 4:
         continue
         
-    # FILTRO BASURA PROFESIONAL (MEJORADO)
+    # FILTRO BASURA PROFESIONAL
     bloquear_fuertes = [
-        " 2", " II", " B", "RESERVA", "RESERVES",  # equipos 2 mejor filtrado
+        " B", " II", " III",  # equipos B y divisiones raras
         "U19", "U20", "U21", "U23",
         "WOMEN", "FEMENINO", " F",
         "AMATEUR", "RESERVES",
@@ -107,7 +103,7 @@ for partido in partidos:
     if any(x in texto for x in bloquear): continue
     if "FINALIZADO" in texto: continue
     if ":" not in texto: continue # Solo partidos que no han empezado
-    
+
     try:
         # Extraer el ID del partido para construir el link limpio
         # Flashscore usa IDs en los elementos, es más seguro que buscar el <a>
