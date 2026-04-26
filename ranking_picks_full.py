@@ -31,24 +31,15 @@ def calcular_score(row):
         score += row.get("Prob_BTTS", 0)
         score += row.get("Value_BTTS", 0) * 2
 
-    # =========================
-    # CONFIANZA
-    # =========================
+    # BONUS POR CONFIANZA
     if row.get("Confianza") == "ALTA":
-        score += 20
+        score += 15
     elif row.get("Confianza") == "MEDIA":
-        score += 10
+        score += 7
 
-    # =========================
-    # FILTROS NEGATIVOS
-    # =========================
+    # PENALIZAR PARTIDOS TRAMPA
     if row.get("Partido_Trampa"):
-        score -= 30
-
-    # Penalización si UNDER flojo
-    if row["Pick"] == "UNDER 2.5":
-        if row.get("Prob_Under2.5", 0) < 75:
-            score -= 15
+        score -= 20
 
     return score
 
@@ -77,7 +68,7 @@ for _, row in df_filtrado.head(10).iterrows():
 
     elif row["Pick"] == "UNDER 2.5":
         prob = row["Prob_Under2.5"]
-        value = row["Value_Under2.5"]
+        value = 100 - row["Prob_Over2.5"]
 
     elif "BTTS" in row["Pick"]:
         prob = row["Prob_BTTS"]

@@ -49,7 +49,19 @@ def mover_dias(driver, dias):
                 if despues != antes:
                     break
         except Exception as e:
-            print("⚠️ Error al cambiar de día:", e)
+            print(" Error al cambiar de día:", e)
+
+# ==============================
+# SISTEMA VIP (EQUIPOS ESPECIALES)
+# ==============================
+equipos_vip = [
+    "PSG",    
+    "ROMA"   
+]
+
+def es_equipo_vip(texto):
+    texto = texto.upper()
+    return any(eq in texto for eq in equipos_vip)
 
 # ==============================
 # EJECUCIÓN
@@ -67,6 +79,26 @@ print("\n--- FILTRANDO PARTIDOS ---")
 for partido in partidos:
     texto = partido.text.upper()
     
+    #  PASE VIP (ANTES DE TODO)
+    if es_equipo_vip(texto):
+        try:
+            id_partido = partido.get_attribute("id").split("_")[-1]
+            link_limpio = f"https://www.flashscore.co/partido/{id_partido}/#/h2h/overall"
+            
+            links_para_txt.append(link_limpio)
+            
+            print(f" 🆙 VIP: {texto.splitlines()[1]} vs {texto.splitlines()[2]}")
+            print(f" 🌐 Link: {link_limpio}")
+            print("-" * 30)
+        except:
+            pass
+        
+        continue  #  IMPORTANTE → salta todos los filtros
+    
+    # NUEVO FILTRO DE PARTIDOS MUERTOS (POCA INFO)
+    if len(texto) < 25:
+        continue
+    
     # NUEVO FILTRO DE CALIDAD POR LÍNEAS MÍNIMAS
     if len(texto.splitlines()) < 3:
         continue
@@ -77,9 +109,9 @@ for partido in partidos:
     if len(equipos[1]) < 4 or len(equipos[2]) < 4:
         continue
         
-    # FILTRO BASURA PROFESIONAL
+    # FILTRO BASURA PROFESIONAL (MEJORADO)
     bloquear_fuertes = [
-        " B", " II", " III",  # equipos B y divisiones raras
+        " 2", " II", " B", "RESERVA", "RESERVES",  # equipos 2 mejor filtrado
         "U19", "U20", "U21", "U23",
         "WOMEN", "FEMENINO", " F",
         "AMATEUR", "RESERVES",
@@ -103,7 +135,7 @@ for partido in partidos:
     if any(x in texto for x in bloquear): continue
     if "FINALIZADO" in texto: continue
     if ":" not in texto: continue # Solo partidos que no han empezado
-
+    
     try:
         # Extraer el ID del partido para construir el link limpio
         # Flashscore usa IDs en los elementos, es más seguro que buscar el <a>

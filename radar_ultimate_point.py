@@ -130,8 +130,7 @@ for liga in ligas:
         (pais == "ITALIA" and "SERIE A" in liga_nombre) or 
         (pais == "FRANCIA" and "LIGUE 1" in liga_nombre) or 
         (pais == "PAÍSES BAJOS" and "KEUKEN KAMPIOEN DIVISIE" in liga_nombre) or 
-        (pais == "BÉLGICA" and "JUPILER PRO LEAGUE" in liga_nombre) or
-        (pais == "INGLATERRA" and "FA Cup" in liga_nombre)
+        (pais == "BÉLGICA" and "JUPILER PRO LEAGUE" in liga_nombre) 
     ):
         continue 
     
@@ -156,7 +155,7 @@ for liga in ligas:
         if len(texto) < 25:
             continue
 
-        if len(texto.splitlines()) < 2:
+        if len(texto.splitlines()) < 3:
             continue
 
         equipos = texto.splitlines()
@@ -164,7 +163,7 @@ for liga in ligas:
         if any(x in texto for x in ["U20","U21","U23","WOMEN","FEMENINA","RESERVA","SUB","2. BUNDESLIGA"]):
             continue
 
-        if len(equipos[1]) < 2 or len(equipos[2]) < 2:
+        if len(equipos[1]) < 4 or len(equipos[2]) < 4:
             continue
 
         if "FINALIZADO" in texto:
