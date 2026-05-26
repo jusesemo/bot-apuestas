@@ -133,7 +133,7 @@ def calcular_probabilidad(h2h, local, visitante):
             (local["promedio"] + visitante["promedio"]) / 2
         ) / 2.5  # 2.5 es línea base
 
-        over25 = over25 * factor_goles
+        over25 = over25 * (factor_goles ** 1.2)
         
         # 🔥 PENALIZACIÓN CLEAN SHEET (definir antes)
         penal_cs = (local["clean_sheet_local"] + visitante["clean_sheet_visitante"]) / 200
@@ -304,13 +304,18 @@ def under_perfecto(local_stats, visitante_stats, modelo, home_scores, away_score
         not gol_oculto(away_scores)
     )
     
-def calcular_score_partido(local_stats, visitante_stats, modelo, home_scores, away_scores):
+def calcular_score_partido(local_stats, visitante_stats, modelo, home_scores, away_scores, favorito_fuerte):
 
+    
     score = {
         "UNDER": 0,
         "OVER": 0,
         "BTTS": 0
     }
+    
+    # 🚨 BLOQUEO BTTS por clean sheet fuerte
+    if modelo["clean_sheet_local"] > 50 or modelo["clean_sheet_visitante"] > 50:
+        score["BTTS"] -= 3
 
     # BASE MODELO
     if modelo["under25"] >= 70:
@@ -371,6 +376,10 @@ def calcular_score_partido(local_stats, visitante_stats, modelo, home_scores, aw
     # BTTS PURO
     if local_stats["btts"] >= 60 and visitante_stats["btts"] >= 60:
         score["BTTS"] += 2
+        
+    if favorito_fuerte:
+        score["OVER"] += 1
+        score["BTTS"] += 1
 
     return score
 
@@ -642,6 +651,7 @@ def ejecutar_analisis():
                 ganador = None
                 handicap = None
                 favorito_fuerte = False   # 👈 SIEMPRE inicializado arriba
+                boost_confianza = False 
 
                 if local_stats and visitante_stats and modelo:
 
@@ -655,7 +665,7 @@ def ejecutar_analisis():
                         local_stats["promedio"] >= visitante_stats["promedio"] + 0.8 and
                         local_stats["over25"] >= visitante_stats["over25"] + 20 and
                         visitante_stats["clean_sheet_local"] >= 40
-    )
+                    )
 
                     # FILTRO: evitar partidos locos
                     partido_abierto = modelo["over25"] > 65 and modelo["btts"] > 60
@@ -671,7 +681,7 @@ def ejecutar_analisis():
                         else:
                             handicap = "LOCAL"
 
-                    # 🔥 DOMINIO VISITANTE
+                    # DOMINIO VISITANTE
                     elif diff_btts <= -25 and diff_cs > 10 and not partido_abierto and not partido_cerrado:
                         ganador = "VISITANTE"
                         
@@ -682,24 +692,25 @@ def ejecutar_analisis():
                         else:
                             handicap = "VISITANTE"
 
-                    # ⚖️ PARTIDO EQUILIBRADO
+                    # PARTIDO EQUILIBRADO
                     else:
                         ganador = "NO CLARO"
                         handicap = None
-                        
-                        # 🔥 VALIDACIÓN FINAL GANADOR (AQUÍ VA 🔥)
+
                     if ganador != "NO CLARO":
 
-                    # 🚨 evitar partidos locos (muchos goles)
                         if partido_abierto_extremo:
                             print("⚠️ Partido muy abierto → evitar ganador")
                             ganador = "NO CLARO"
                             handicap = None
 
-                        # 🧱 partido con alta probabilidad de portería en cero
                         elif modelo["clean_sheet_local"] > 55 or modelo["clean_sheet_visitante"] > 55:
                             print("🧱 Partido con tendencia a portería en cero")
 
+                        elif favorito_fuerte:
+                            print("💎 FAVORITO FUERTE (GANADOR)")
+                            boost_confianza = True   # 👈 AQUÍ
+                            
 
                 print("\n==========================")
                 print("GANADOR Y HANDICAP")
@@ -711,19 +722,6 @@ def ejecutar_analisis():
                     print("Handicap sugerido:", handicap)
                 else:
                     print("Sin handicap claro")
-                    
-                # 💎 FAVORITO FUERTE DETECTADO
-                if ganador == "LOCAL" and favorito_fuerte:
-                    print("💎 FAVORITO FUERTE (GANADOR)")
-                    
-                # 🔥 AÚN MEJOR (ANTI-TRAMPA)
-                if partido_abierto_extremo:
-                    print("⚠️ Partido abierto → evitar ganador")
-                    ganador = "NO CLARO"
-                    handicap = None
-                    
-                if ganador != "NO CLARO" and modelo["clean_sheet_local"] > 50:
-                    print("⚠️ Posible victoria a cero")
                     
                 cuota_btts, cuota_over = 1.75, 1.95
                 value_btts = calcular_value(modelo["btts"], cuota_btts)
@@ -777,7 +775,7 @@ def ejecutar_analisis():
                 print("DECISION FINAL (SCORE PRO)")
                 print("==========================")
 
-                score = calcular_score_partido(local_stats, visitante_stats, modelo, home_scores, away_scores)
+                score = calcular_score_partido(local_stats, visitante_stats, modelo, home_scores, away_scores, favorito_fuerte)
 
                 print(f"📊 SCORE: {score}")
 
@@ -796,6 +794,10 @@ def ejecutar_analisis():
                         pick = None
                         confianza = "BAJA"
                     
+                    # 🔥 BOOST POR FAVORITO FUERTE
+                    if boost_confianza and confianza == "MEDIA" and pick in ["OVER", "BTTS"]:
+                        print("🚀 Boost de confianza por favorito fuerte")
+                        confianza = "ALTA"
                 
                     
                 if pick == "BTTS":
@@ -854,17 +856,18 @@ def ejecutar_analisis():
                     jugar = False
                     pick_final = None
                     
-                    if value_over >= 8:
+                    
+                    if pick == "OVER 2.5" and value_over >= 8:
                         jugar = True
                         pick_final = "OVER 2.5"
                         print(" 📈 JUGAR: SÍ (OVER con value)")
 
-                    elif value_btts >= 8:
+                    elif pick == "BTTS" and value_btts >= 8:
                         jugar = True
                         pick_final = "BTTS"
                         print(" 📈 JUGAR: SÍ (BTTS con value)")
 
-                    elif value_under >= 8:
+                    elif pick == "UNDER 2.5" and value_under >= 8:
                         jugar = True
                         pick_final = "UNDER 2.5"
                         print(" 📈 JUGAR: SÍ (UNDER con value)")

@@ -103,9 +103,10 @@ print("\n--- FILTRANDO PARTIDOS ---")
 
 ligas = driver.find_elements(By.CLASS_NAME, "headerLeague__wrapper")
 
-ligas_under = ["COLOMBIA", "ESPAÑA", "ITALIA", "ARGENTINA","FRANCIA"]
-ligas_over = ["ALEMANIA", "PAÍSES BAJOS","BÉLGICA"]
+ligas_under = ["COLOMBIA", "ESPAÑA", "ITALIA", "ARGENTINA","FRANCIA","PORTUGAL","CHINA"]
+ligas_over = ["ALEMANIA", "PAÍSES BAJOS","BÉLGICA","ARABIA SAUDÍ","BRASIL"]
 ligas_btts = ["INGLATERRA", "ESTADOS UNIDOS"]
+ligas_internacionales = ["EUROPA", "SUDAMÉRICA"]
 
 for liga in ligas:
     try:
@@ -130,7 +131,20 @@ for liga in ligas:
         (pais == "ITALIA" and "SERIE A" in liga_nombre) or 
         (pais == "FRANCIA" and "LIGUE 1" in liga_nombre) or 
         (pais == "PAÍSES BAJOS" and "KEUKEN KAMPIOEN DIVISIE" in liga_nombre) or 
-        (pais == "BÉLGICA" and "JUPILER PRO LEAGUE" in liga_nombre) 
+        (pais == "BÉLGICA" and "JUPILER PRO LEAGUE" in liga_nombre) or
+        (pais == "INGLATERRA" and "FA Cup" in liga_nombre) or
+        (pais == "EUROPA" and "CHAMPIONS LEAGUE" in liga_nombre) or
+        (pais == "SUDAMÉRICA" and "COPA LIBERTADORES" in liga_nombre) or
+        (pais == "SUDAMÉRICA" and "COPA SUDAMERICANA" in liga_nombre) or
+        (pais == "ARABIA SAUDÍ" and "SAUDI PROFESSIONAL LEAGUE" in liga_nombre) or
+        (pais == "EUROPA" and "EUROPA LEAGUE" in liga_nombre) or
+        (pais == "BRASIL" and "SERIE A BETANO" in liga_nombre) or
+        (pais == "CHINA" and "SUPERLIGA" in liga_nombre) or 
+        (pais == "PORTUGAL" and "LIGA PORTUGAL" in liga_nombre) or
+        (pais == "ESTADOS UNIDOS" and "MLS" in liga_nombre) or
+        (pais == "BRASIL" and "COPA BETANO DO BRASIL" in liga_nombre) 
+        
+        
     ):
         continue 
     
@@ -141,6 +155,8 @@ for liga in ligas:
         tipo_liga = "OVER"
     elif pais in ligas_btts:
         tipo_liga = "BTTS"
+    elif pais in ligas_internacionales:
+        tipo_liga = "INTERNACIONAL"
     else:
         continue
 
@@ -152,10 +168,10 @@ for liga in ligas:
     for partido in partidos:
         texto = partido.text.upper()
 
-        if len(texto) < 25:
+        if len(texto) < 12:
             continue
 
-        if len(texto.splitlines()) < 3:
+        if len(texto.splitlines()) < 2:
             continue
 
         equipos = texto.splitlines()
@@ -163,7 +179,7 @@ for liga in ligas:
         if any(x in texto for x in ["U20","U21","U23","WOMEN","FEMENINA","RESERVA","SUB","2. BUNDESLIGA"]):
             continue
 
-        if len(equipos[1]) < 4 or len(equipos[2]) < 4:
+        if len(equipos[1]) < 2 or len(equipos[2]) < 2:
             continue
 
         if "FINALIZADO" in texto:
