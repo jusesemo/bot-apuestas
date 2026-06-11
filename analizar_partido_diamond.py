@@ -110,6 +110,7 @@ def analizar_marcadores(lista):
         "clean_sheet_visitante": round((clean_sheet_visitante / partidos) * 100, 1)
     }
 
+
 def calcular_probabilidad(h2h, local, visitante):
 
     # 🔥 CASO SIN H2H (modelo recalibrado)
@@ -132,7 +133,7 @@ def calcular_probabilidad(h2h, local, visitante):
             (local["promedio"] + visitante["promedio"]) / 2
         ) / 2.5  # 2.5 es línea base
 
-        over25 = over25 * factor_goles
+        over25 = over25 * (factor_goles ** 1.2)
         
         # 🔥 PENALIZACIÓN CLEAN SHEET (definir antes)
         penal_cs = (local["clean_sheet_local"] + visitante["clean_sheet_visitante"]) / 200
@@ -189,7 +190,11 @@ def calcular_probabilidad(h2h, local, visitante):
     over25 = over25 * (1 - penal_cs * 0.5)
 
     # 🔥 coherencia matemática
-    under25 = (1 - over25)
+    under25 = (
+        (h2h["under25"]/100) * 0.3 +
+        (local["under25"]/100) * 0.35 +
+        (visitante["under25"]/100) * 0.35
+    )
 
     return {
         "btts": round(btts * 100, 1), 
@@ -298,6 +303,111 @@ def under_perfecto(local_stats, visitante_stats, modelo, home_scores, away_score
         not gol_oculto(home_scores) and
         not gol_oculto(away_scores)
     )
+    
+def calcular_score_partido(local_stats, visitante_stats, modelo, home_scores, away_scores, favorito_fuerte):
+
+    
+    score = {
+        "UNDER": 0,
+        "OVER": 0,
+        "BTTS": 0
+    }
+    
+    # 🚨 BLOQUEO BTTS por clean sheet fuerte
+    if modelo["clean_sheet_local"] > 50 or modelo["clean_sheet_visitante"] > 50:
+        score["BTTS"] -= 3
+
+    # BASE MODELO
+    if modelo["under25"] >= 70:
+        score["UNDER"] += 3
+    elif modelo["under25"] >= 60:
+        score["UNDER"] += 2
+
+    if modelo["over25"] >= 70:
+        score["OVER"] += 3
+    elif modelo["over25"] >= 60:
+        score["OVER"] += 2
+
+    if modelo["btts"] >= 65:
+        score["BTTS"] += 3
+    elif modelo["btts"] >= 55:
+        score["BTTS"] += 2
+
+    # PROMEDIO GOLES
+    avg_total = (local_stats["promedio"] + visitante_stats["promedio"]) / 2
+
+    if avg_total <= 2.2:
+        score["UNDER"] += 2
+    elif avg_total >= 2.8:
+        score["OVER"] += 2
+
+    # VOLATILIDAD
+    vol_local = volatilidad_goles(home_scores)
+    vol_visit = volatilidad_goles(away_scores)
+    
+    print(f"📉 Volatilidad Local: {vol_local} | Visitante: {vol_visit}")
+
+   # 🚨 ALERTA TEMPRANA DE CAOS
+    if vol_local > 2.5 or vol_visit > 2.5:
+        print("⚠️ Partido con alta volatilidad detectado")
+        score["OVER"] += 2  # castigas directo hacia over
+
+    elif vol_local < 1.2 and vol_visit < 1.2:
+        score["UNDER"] += 2
+
+    elif vol_local > 2 or vol_visit > 2:
+        score["OVER"] += 1
+
+    # GOLES ALTOS
+    if gol_oculto(home_scores) or gol_oculto(away_scores):
+        score["OVER"] += 1
+        score["UNDER"] -= 1
+
+    # CAOS
+    if partido_caotico(home_scores) or partido_caotico(away_scores):
+        score["OVER"] += 2
+        score["UNDER"] -= 3
+
+    # CLEAN SHEET
+    if modelo["clean_sheet_local"] > 50 or modelo["clean_sheet_visitante"] > 50:
+        score["UNDER"] += 1
+        score["BTTS"] -= 2
+
+    # BTTS PURO
+    if local_stats["btts"] >= 60 and visitante_stats["btts"] >= 60:
+        score["BTTS"] += 2
+        
+    if favorito_fuerte:
+        score["OVER"] += 1
+        score["BTTS"] += 1
+
+    return score
+
+def analizar_resultados(df):
+
+    total = len(df)
+    ganadas = len(df[df["Resultado"] == "WIN"])
+    perdidas = len(df[df["Resultado"] == "LOSS"])
+
+    winrate = (ganadas / total) * 100 if total > 0 else 0
+
+    profit = 0
+
+    for _, row in df.iterrows():
+        if row["Resultado"] == "WIN":
+            profit += (row["Cuota"] - 1)
+        elif row["Resultado"] == "LOSS":
+            profit -= 1
+
+    roi = (profit / total) * 100 if total > 0 else 0
+
+    print("\n==========================")
+    print("📊 RESULTADOS REALES")
+    print("==========================")
+    print(f"Apuestas: {total}")
+    print(f"Winrate: {round(winrate,2)}%")
+    print(f"ROI: {round(roi,2)}%")
+    
 # ==============================
 # EJECUCIÓN MASIVA
 # ==============================
@@ -320,7 +430,8 @@ def ejecutar_analisis():
     driver = webdriver.Chrome(service=service, options=chrome_options)
     driver.maximize_window()
     wait = WebDriverWait(driver, 20)
-
+    partidos_data = []
+    
     for index, link in enumerate(links):
         try:
             driver.get(link)
@@ -408,6 +519,7 @@ def ejecutar_analisis():
                         pass
 
                 h2h_scores = marcadores_general[-5:]
+                
 
             # 2. LOCAL EN CASA
             local_tab = limpiar_nombre(local)
@@ -475,8 +587,10 @@ def ejecutar_analisis():
             print("MODELO DE APUESTA")
             print("==========================")
             modelo = calcular_probabilidad(h2h_stats, local_stats, visitante_stats)
+           
 
             if modelo:
+                partido_abierto_extremo = modelo["over25"] > 65 and modelo["btts"] > 60
                 print("Probabilidad BTTS:", modelo["btts"], "%")
                 print("Probabilidad Over 2.5:", modelo["over25"], "%")
                 print("Probabilidad Under 2.5:", modelo["under25"], "%")
@@ -537,6 +651,8 @@ def ejecutar_analisis():
 
                 ganador = None
                 handicap = None
+                favorito_fuerte = False   # 👈 SIEMPRE inicializado arriba
+                boost_confianza = False 
 
                 if local_stats and visitante_stats and modelo:
 
@@ -566,7 +682,7 @@ def ejecutar_analisis():
                         else:
                             handicap = "LOCAL"
 
-                    # 🔥 DOMINIO VISITANTE
+                    # DOMINIO VISITANTE
                     elif diff_btts <= -25 and diff_cs > 10 and not partido_abierto and not partido_cerrado:
                         ganador = "VISITANTE"
                         
@@ -577,24 +693,25 @@ def ejecutar_analisis():
                         else:
                             handicap = "VISITANTE"
 
-                    # ⚖️ PARTIDO EQUILIBRADO
+                    # PARTIDO EQUILIBRADO
                     else:
                         ganador = "NO CLARO"
                         handicap = None
-                        
-                        # 🔥 VALIDACIÓN FINAL GANADOR (AQUÍ VA 🔥)
-                if ganador != "NO CLARO":
 
-                    # 🚨 evitar partidos locos (muchos goles)
-                    if modelo["over25"] > 65 and modelo["btts"] > 60:
-                        print("⚠️ Partido muy abierto → evitar ganador")
-                        ganador = "NO CLARO"
-                        handicap = None
+                    if ganador != "NO CLARO":
 
-                    # 🧱 partido con alta probabilidad de portería en cero
-                    elif modelo["clean_sheet_local"] > 55 or modelo["clean_sheet_visitante"] > 55:
-                        print("🧱 Partido con tendencia a portería en cero")
+                        if partido_abierto_extremo:
+                            print("⚠️ Partido muy abierto → evitar ganador")
+                            ganador = "NO CLARO"
+                            handicap = None
 
+                        elif modelo["clean_sheet_local"] > 55 or modelo["clean_sheet_visitante"] > 55:
+                            print("🧱 Partido con tendencia a portería en cero")
+
+                        elif favorito_fuerte:
+                            print("💎 FAVORITO FUERTE (GANADOR)")
+                            boost_confianza = True   # 👈 AQUÍ
+                            
 
                 print("\n==========================")
                 print("GANADOR Y HANDICAP")
@@ -607,20 +724,7 @@ def ejecutar_analisis():
                 else:
                     print("Sin handicap claro")
                     
-                # 💎 FAVORITO FUERTE DETECTADO
-                if ganador == "LOCAL" and favorito_fuerte:
-                    print("💎 FAVORITO FUERTE (GANADOR)")
-                    
-                # 🔥 AÚN MEJOR (ANTI-TRAMPA)
-                if modelo["over25"] > 65 and modelo["btts"] > 60:
-                    print("⚠️ Partido abierto → evitar ganador")
-                    ganador = "NO CLARO"
-                    handicap = None
-                    
-                if ganador != "NO CLARO" and modelo["clean_sheet_local"] > 50:
-                    print("⚠️ Posible victoria a cero")
-                    
-                cuota_btts, cuota_over = 1.75, 1.95
+                cuota_btts, cuota_over = 1.80, 1.95
                 value_btts = calcular_value(modelo["btts"], cuota_btts)
                 value_over = calcular_value(modelo["over25"], cuota_over)
                 value_under = calcular_value(modelo["under25"], 1.80)
@@ -666,303 +770,146 @@ def ejecutar_analisis():
                 
                 if btts_riesgoso:
                     print(" 🔁❓ BTTS RIESGOSO (posible gol de un solo equipo)")
-
+                
+                
                 print("\n==========================")
-                print("DECISION FINAL (MODO ESTADISTICO)")
+                print("DECISION FINAL (SCORE PRO)")
                 print("==========================")
 
-                pick = None
-                confianza = "BAJA"
+                score = calcular_score_partido(local_stats, visitante_stats, modelo, home_scores, away_scores, favorito_fuerte)
 
-                # 🔥 NUEVO FILTRO PRO 
-                under_fuerte = (
-                    modelo["under25"] >= 70 and
-                    modelo["btts"] < 60 and
-                    modelo["over25"] < 50 and
-                    local_stats["over25"] < 50 and
-                    visitante_stats["over25"] < 50
-                )
+                print(f"📊 SCORE: {score}")
+
+                if all(v <= 0 for v in score.values()):
+                    pick = None
+                    confianza = "BAJA"
+                else:
+                    pick = max(score, key=score.get)
+                    valor = score[pick]
+
+                    if valor >= 6:
+                        confianza = "ALTA"
+                    elif valor >= 4:
+                        confianza = "MEDIA"
+                    else:
+                        pick = None
+                        confianza = "BAJA"
+                    
+                    # 🔥 BOOST POR FAVORITO FUERTE
+                    if boost_confianza and confianza == "MEDIA" and pick in ["OVER", "BTTS"]:
+                        print("🚀 Boost de confianza por favorito fuerte")
+                        confianza = "ALTA"
                 
-                over_fuerte = (
-                    modelo["over25"] >= 70 and
-                    local_stats["over25"] >= 60 and
-                    visitante_stats["over25"] >= 60 and
-                    local_stats["promedio"] >= 2.5 and
-                    visitante_stats["promedio"] >= 2.5
-                )
-
-                # 🔒 PARTIDO CERRADO
-                if perfil == "CERRADO":
-
-                    if under_fuerte:
-                        pick = "UNDER 2.5"
-                        print(" 🔽 PICK: UNDER 2.5")
-
-                        # 🔥 AQUÍ VA TU BLOQUE PRO
-                        if under_perfecto(local_stats, visitante_stats, modelo, home_scores, away_scores):
-                            print("💎💎 UNDER PERFECTO (MÁXIMA CONFIANZA)")
-                            confianza = "ALTA"   # fuerza máxima
-
-                        elif filtro_under_pro(local_stats, visitante_stats, modelo):
-                            print("💎 UNDER PREMIUM (ESCALERA)")
-                            confianza = "ALTA" if modelo["under25"] >= 75 else "MEDIA"
-
-                        else:
-                            print("⚠️ UNDER NORMAL")
-                            confianza = "ALTA" if modelo["under25"] >= 70 else "MEDIA"
-
-                    else:
-                        print(" ❌ CERRADO sin fuerza → NO BET")
-
-                # 🔥 PARTIDO ABIERTO
-                elif perfil == "ABIERTO":
                     
-                    if over_fuerte:
-                        pick = "OVER 2.5"
-                        print(" 🔝 PICK: OVER 2.5 (FUERTE)")
+                if pick == "BTTS":
+                    if modelo["clean_sheet_local"] > 55 or modelo["clean_sheet_visitante"] > 55:
+                        print("❌ BTTS cancelado por clean sheet")
+                        pick = None
+                        confianza = "BAJA"   # 👈 AQUÍ
 
+                if pick == "UNDER":
+                    if partido_caotico(home_scores) or partido_caotico(away_scores):
+                        print("💣 UNDER cancelado por caos")
+                        pick = None
+                        confianza = "BAJA"   # 👈 AQUÍ
 
-                    if modelo["over25"] >= 65 and modelo["btts"] >= 55:
-                        pick = "OVER 2.5"
+                if pick == "OVER":
+
+                    # 🔻 OVER débil
+                    if modelo["btts"] < 50:
+                        print("⚠️ OVER débil sin BTTS")
+                        confianza = "MEDIA"
+
+                    # 🔥 recalcular volatilidad
+                    vol_local = volatilidad_goles(home_scores)
+                    vol_visit = volatilidad_goles(away_scores)
+
+                    # 💀 OVER MUY CAOTICO (bloqueo total)
+                    if vol_local > 3 or vol_visit > 3:
+                        print("💀 OVER ULTRA CAOTICO → evitar")
+                        pick = None
+                        confianza = "BAJA"
+
+                    # 💣 OVER CAOTICO (solo baja confianza)
+                    elif vol_local > 2.5 or vol_visit > 2.5:
+                        print("💣 OVER CAOTICO → bajar confianza")
+                        confianza = "MEDIA"
                         
-                        print(" 🔝 PICK: OVER 2.5")
-
-                        confianza = "ALTA" if modelo["over25"] >= 70 else "MEDIA"
-
-                    elif modelo["btts"] >= 65 and not btts_riesgoso:
-                        pick = "BTTS"
-                        print(" 🟰 PICK: BTTS")
-
-                        confianza = "ALTA" if modelo["btts"] >= 70 else "MEDIA"
-
-                    else:
-                        print(" ❌ ABIERTO sin fuerza → NO BET")
-
-
-                # ⚖️ BTTS CERRADO (1-1 típico)
-                elif perfil == "BTTS_CERRADO":
-
-                    if modelo["btts"] >= 65 and not btts_riesgoso:
-                        pick = "BTTS"
-                        print(" 🟰 PICK: BTTS (1-1 típico)")
-
-                        confianza = "ALTA" if modelo["btts"] >= 70 else "MEDIA"
-
-                    else:
-                        print(" ❌ BTTS CERRADO no confiable")
-
-
-                # 🪤 MIXTO = EVITAR
-                elif perfil == "MIXTO":
-                    print(" � PARTIDO TRAMPA → NO BET")
-
-
-                # � VALUE (solo si no hay pick)
-                if not pick:
-
-                    if perfil == "ABIERTO" and value_over > 5 and modelo["over25"] >= 60:
-                        pick = "OVER 2.5"
-                        print(" 💰 VALUE OVER")
-
-                    elif perfil in ["ABIERTO", "BTTS_CERRADO"] and value_btts > 5 and modelo["btts"] >= 60:
-                        pick = "BTTS"
-                        print(" 💰 VALUE BTTS")
-
-
-                # 🚨 FILTRO FINAL
+                    
+                        
+                mapa = {
+                        "UNDER": "UNDER 2.5",
+                        "OVER": "OVER 2.5",
+                        "BTTS": "BTTS"
+                    }
                 if pick:
-
-                # 🔥 FILTRO OVER POR DOMINIO
-                    if pick == "OVER 2.5":
-                        over_ok = over_intercambio(local_stats, visitante_stats, modelo)
-                        
-                        if not over_ok:
-                            print("⚠️ OVER POR DOMINIO → RIESGO")
-                            
-                    if pick == "OVER 2.5" and over_fuerte:
-                        print("💎 OVER PREMIUM")
-
-                     # 💣 FILTRO ANTI UNDER FALSO (NUEVO)
-                    if pick == "UNDER 2.5":
-                        if partido_inestable(local_stats, visitante_stats):
-                            print("💣 PARTIDO INESTABLE DETECTADO → UNDER CANCELADO")
-                            confianza = "BAJA"
-                            
-                    # 💣 FILTRO CAOS (CLAVE REAL)
-                        if partido_caotico(home_scores) or partido_caotico(away_scores):
-                            print("💣 PARTIDO CAOTICO → UNDER CANCELADO")
-                            pick = None
-                            
-                        #  NUEVO FILTRO DE VOLATILIDAD (EL MÁS IMPORTANTE)
-                        if pick == "UNDER 2.5":
-                            vol_local = volatilidad_goles(home_scores)
-                            vol_visit = volatilidad_goles(away_scores)
-                            
-                            if vol_local > 1.5 or vol_visit > 1.5:
-                                print(" ALTA VOLATILIDAD --> UNDER CANCELADO")
-                                confianza = "BAJA"
-                                
-                            elif vol_local > 0.8 or vol_visit > 0.8:
-                                print(" VOLATILIDAD NORMAL --> UNDER EN RIESGO")
-                                if confianza == "ALTA":
-                                    confianza = "MEDIA"
-                        
-                        # 💣 FILTRO PRO UNDER (NUEVO)
-                        if pick == "UNDER 2.5":
-
-                            es_pro = filtro_under_pro(local_stats, visitante_stats, modelo)
-                            es_perfecto = under_perfecto(local_stats, visitante_stats, modelo, home_scores, away_scores)
-
-                            if not es_pro and not es_perfecto:
-                                print("⚠️ UNDER SIN PERFIL PRO → BAJAR CONFIANZA")
-                                if confianza == "ALTA":
-                                    confianza = "MEDIA"
-                        
-                        #  NUEVO FILTRO DE GOL OCULTO
-                        if pick == "UNDER 2.5":
-                            if gol_oculto(home_scores) or gol_oculto(away_scores):
-                                print(" GOL OCULTO DETECTADO --> UNDER EN RIESGO")
-                                confianza = "MEDIA"
-                    
-                    #  REGLA DE ORO: UNDER EXTREMO SOSPECHOSO
-                    if modelo["under25"] >= 90:
-                        if not filtro_under_pro(local_stats, visitante_stats, modelo):
-                            print(" UNDER EXTREMO --> POSIBLE TRAMPA ESTADÍSTICA")
-                            confianza = "MEDIA"
-                    
-                    # ESCALAR SEGURIDAD SOLO EN UNDER
-                    if pick == "UNDER 2.5":
-
-                        if puede_subir_linea:
-                            print(" 🔒 UNDER 3.5 SEGURO")
-                        else:
-                            print(" ⚠️ NO ESCALAR → riesgo oculto")
-
-                    # ZONA DE 1-2 GOLES (NUEVA REGLA)
-                    if zona_partido_cerrado(home_scores) and zona_partido_cerrado(away_scores):
-                        print(" PARTIDO DE 1-2 GOLES DETECTADO")
-
-                        if modelo["over25"] < 70:
-                            print(" OVER FALSO - CANCELADO")
-                            confianza = "BAJA"
-
-                    # 🛑 Clean sheets
-                    if modelo["clean_sheet_local"] > 50 or modelo["clean_sheet_visitante"] > 50:
-                        if pick in ["BTTS", "OVER 2.5"]:
-                            print(" ❌ RIESGO DE PORTERÍA EN CERO")
-                            pick = None
-
-                    # 🔍 BTTS BLOQUEADO
-                    if modelo["btts"] >= 65 and pick != "BTTS":
-                        print("🔍 POSIBLE BTTS DETECTADO PERO BLOQUEADO")
-         
-                    # ===========================
-                    # SCORE PROFESIONAL (NUEVO)
-                    # ===========================
-
-                    score = 0
-
-                    if pick == "UNDER 2.5":
-
-                        # 🔥 BASE FUERTE
-                        if modelo["under25"] >= 75:
-                            score += 3
-                        elif modelo["under25"] >= 65:
-                            score += 2
-
-                        if modelo["btts"] < 50:
-                            score += 2
-
-                        # 🔥 PROMEDIO GOLES
-                        if local_stats["promedio"] <= 2.2:
-                            score += 1
-                        else:
-                            score -= 1
-
-                        if visitante_stats["promedio"] <= 2.2:
-                            score += 1
-                        else:
-                            score -= 1
-
-                        # 🔥 VOLATILIDAD (AJUSTADA)
-                        vol_local = volatilidad_goles(home_scores)
-                        vol_visit = volatilidad_goles(away_scores)
-
-                        if vol_local < 1.2:
-                            score += 1
-                        elif vol_local > 2.2:
-                            score -= 2
-
-                        if vol_visit < 1.2:
-                            score += 1
-                        elif vol_visit > 2.2:
-                            score -= 2
-
-                        # 🔥 GOLES ALTOS (ANTES "GOL OCULTO")
-                        if gol_oculto(home_scores) or gol_oculto(away_scores):
-                            score -= 1
-
-                        # 🔥 CAOS (ÚNICO BLOQUE FUERTE)
-                        if partido_caotico(home_scores) or partido_caotico(away_scores):
-                            score -= 3
-
-                        # 🔥 CLEAN SHEET PELIGROSO
-                        if modelo["clean_sheet_local"] > 55 or modelo["clean_sheet_visitante"] > 55:
-                            score -= 2
-
-                        print(f"📊 SCORE FINAL UNDER: {score}")
-
-                        # 🎯 DECISIÓN FINAL
-                        if score >= 7:
-                            confianza = "ALTA"
-                        elif score >= 4:
-                            confianza = "MEDIA"
-                        else:
-                            print("❌ SCORE BAJO → NO BET")
-                            pick = None
-                            confianza = "BAJA"
-                    
-                    
+                    pick = mapa.get(pick, pick)
+        
                 # RESULTADO FINAL
                 if pick:
                     print(f" 🏁 RECOMENDACION FINAL: {pick}")
                     print(f" 🔝 CONFIANZA: {confianza}")
                     if confianza == "ALTA":
                         print(" 💎 PICK PREMIUM (APTO PARA JUGAR)")
-                
-            
+                    
+                    # LÓGICA DE DECISIÓN PARA JUGAR (AJUSTADA)
+                    
+                    jugar = False
+                    pick_final = None
+                    
+                    
+                    if pick == "OVER 2.5" and value_over >= 8:
+                        jugar = True
+                        pick_final = "OVER 2.5"
+                        print(" 📈 JUGAR: SÍ (OVER con value)")
+
+                    elif pick == "BTTS" and value_btts >= 8:
+                        jugar = True
+                        pick_final = "BTTS"
+                        print(" 📈 JUGAR: SÍ (BTTS con value)")
+
+                    elif pick == "UNDER 2.5" and value_under >= 8:
+                        jugar = True
+                        pick_final = "UNDER 2.5"
+                        print(" 📈 JUGAR: SÍ (UNDER con value)")
+
+                    else:
+                        jugar = False
+                        print(" ❌ JUGAR: NO (sin value suficiente)")
+                    
+                    if jugar:
+                        print(f"🎯 PICK FINAL REAL: {pick_final}")  
+                        
+                partido_info = {
+                    "Local": local,
+                    "Visitante": visitante,
+                    "Prob_BTTS": modelo["btts"] if modelo else None,
+                    "Prob_Over2.5": modelo["over25"] if modelo else None,
+                    "Prob_Under2.5": modelo["under25"] if modelo else None,
+                    "Value_BTTS": value_btts if modelo else None,
+                    "Value_Over2.5": value_over if modelo else None,
+                    "Value_Under2.5": value_under if modelo else None,
+                    "Pick": pick,
+                    "Confianza": confianza,
+                    "Ganador": ganador,
+                    "Handicap": handicap,
+                    "Cuota": None,
+                    "Resultado": None,
                    
+                }
+        
+                partidos_data.append(partido_info)
+
+                                   
         except Exception as e:
             print(f"\n Error procesando link: {link}\nDetalle: {e}")
             continue
-
+        
+        
     # BLOQUE EXTRA: GUARDAR TODO EN EXCEL
     # =======================================
-    import pandas as pd
     
-    if 'partidos_data' not in locals():
-        partidos_data = []
-
-        partido_info = {
-            "Local": local,
-            "Visitante": visitante,
-            "Prob_BTTS": modelo["btts"] if modelo else None,
-            "Prob_Over2.5": modelo["over25"] if modelo else None,
-            "Prob_Under2.5": modelo["under25"] if modelo else None,
-            "Value_BTTS": value_btts if modelo else None,
-            "Value_Over2.5": value_over if modelo else None,
-            "Value_Under2.5": value_under if modelo else None,
-            "Pick": pick,
-            "Confianza": confianza,
-            "Ganador": ganador,
-            "Handicap": handicap
-        }
-
-
-        
-    partidos_data.append(partido_info)
     
-    # Al final de ejecutar_analisis(), fuera del for:
     if partidos_data:
         import pandas as pd
         df = pd.DataFrame(partidos_data)
@@ -970,6 +917,13 @@ def ejecutar_analisis():
         df.to_csv("analisis_partidos_full.csv", index=False)
 
         print("\n✅ Archivo generado correctamente")
+    
+     # 🔥 ANALIZAR RESULTADOS (cuando ya tengas WIN/LOSS en el Excel)
+    try:
+        df_resultados = pd.read_excel("analisis_partidos_full.xlsx")
+        analizar_resultados(df_resultados)
+    except Exception as e:
+        print("⚠️ Aún no hay resultados para analizar (agrega WIN/LOSS en el Excel)")
 
     driver.quit()
 

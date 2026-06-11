@@ -495,30 +495,63 @@ def ejecutar_analisis():
             except:
                 pass
 
-            if no_h2h:
-                print("⚠️ NO HAY H2H REAL - se omite")
+            h2h_scores = []
+
+            secciones = driver.find_elements(
+                By.CSS_SELECTOR,
+                "div.h2h__section"
+            )
+
+            for seccion in secciones:
+
+                try:
+
+                    titulo = seccion.find_element(
+                        By.CSS_SELECTOR,
+                        '[data-testid="wcl-scores-overline-02"]'
+                    ).text.strip()
+
+                    print("SECCION:", titulo)
+
+                    if titulo == "ENFRENTAMIENTOS":
+
+                        rows = seccion.find_elements(
+                            By.CLASS_NAME,
+                            "h2h__row"
+                        )
+
+                        for row in rows:
+
+                            resultado = row.find_element(
+                                By.CLASS_NAME,
+                                "h2h__result"
+                            )
+
+                            goles = resultado.find_elements(
+                                By.TAG_NAME,
+                                "span"
+                            )
+
+                            if len(goles) == 2:
+
+                                g1 = goles[0].text.strip()
+                                g2 = goles[1].text.strip()
+
+                                if g1.isdigit() and g2.isdigit():
+                                    h2h_scores.append(f"{g1}-{g2}")
+
+                except:
+                    pass
+
+            if len(h2h_scores) < 4:
+
+                print(
+                    f"⚠️ H2H insuficiente ({len(h2h_scores)} partidos) → ignorando"
+                )
+
                 h2h_scores = []
-                h2h_stats = None
-            else:
-                rows = driver.find_elements(By.CLASS_NAME, "h2h__row")
-
-                marcadores_general = []
-
-                for row in rows:
-                    try:
-                        resultado = row.find_element(By.CLASS_NAME, "h2h__result")
-                        goles = resultado.find_elements(By.TAG_NAME, "span")
-
-                        if len(goles) == 2:
-                            g1 = goles[0].text.strip()
-                            g2 = goles[1].text.strip()
-
-                            if g1.isdigit() and g2.isdigit():
-                                marcadores_general.append(f"{g1}-{g2}")
-                    except:
-                        pass
-
-                h2h_scores = marcadores_general[-5:]
+                print("DEBUG H2H:", h2h_scores)    
+        
 
             # 2. LOCAL EN CASA
             local_tab = limpiar_nombre(local)
@@ -723,7 +756,7 @@ def ejecutar_analisis():
                 else:
                     print("Sin handicap claro")
                     
-                cuota_btts, cuota_over = 1.75, 1.95
+                cuota_btts, cuota_over = 1.80, 1.95
                 value_btts = calcular_value(modelo["btts"], cuota_btts)
                 value_over = calcular_value(modelo["over25"], cuota_over)
                 value_under = calcular_value(modelo["under25"], 1.80)

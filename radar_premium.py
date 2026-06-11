@@ -106,7 +106,7 @@ ligas = driver.find_elements(By.CLASS_NAME, "headerLeague__wrapper")
 ligas_under = ["COLOMBIA", "ESPAÑA", "ITALIA", "ARGENTINA","FRANCIA","PORTUGAL","CHINA"]
 ligas_over = ["ALEMANIA", "PAÍSES BAJOS","BÉLGICA","ARABIA SAUDÍ","BRASIL"]
 ligas_btts = ["INGLATERRA", "ESTADOS UNIDOS"]
-ligas_internacionales = ["EUROPA", "SUDAMÉRICA"]
+ligas_internacionales = ["EUROPA", "SUDAMÉRICA","MUNDIAL","CAMPEONATO DEL MUNDO"]
 
 for liga in ligas:
     try:
@@ -142,8 +142,10 @@ for liga in ligas:
         (pais == "CHINA" and "SUPERLIGA" in liga_nombre) or 
         (pais == "PORTUGAL" and "LIGA PORTUGAL" in liga_nombre) or
         (pais == "ESTADOS UNIDOS" and "MLS" in liga_nombre) or
-        (pais == "BRASIL" and "COPA BETANO DO BRASIL" in liga_nombre) 
-        
+        (pais == "BRASIL" and "COPA BETANO DO BRASIL" in liga_nombre) or
+        (pais == "EUROPA" and "CONFERENCE LEAGUE" in liga_nombre) or
+        (pais == "MUNDIAL" and "AMISTOSOS INTERNACIONALES" in liga_nombre) or
+        (pais == "MUNDIAL" and "CAMPEONATO DEL MUNDO" in liga_nombre) 
         
     ):
         continue 
